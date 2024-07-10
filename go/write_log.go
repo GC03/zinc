@@ -2,11 +2,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 
 	"github.com/minio/minio-go/v7"
@@ -49,14 +49,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Create a file to write the logs
-	filename := "logs.json"
-	file, err := os.Create(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
 	// Initialize line counter
 	lineNumber := 0
 
@@ -89,22 +81,13 @@ func main() {
 			log.Fatal(err)
 		}
 
-		// Write to temporary file
-		tempFile := filename + ".tmp"
-		if err := os.WriteFile(tempFile, jsonData, 0644); err != nil {
-			log.Fatal(fmt.Errorf("error writing temporary file: %w", err))
-		}
-
-		// Rename temporary file to target file
-		if err := os.Rename(tempFile, filename); err != nil {
-			log.Fatal(fmt.Errorf("error renaming file: %w", err))
-		}
-
-		// Uploads the json file to minio
-		_, err = minioClient.FPutObject(context.Background(), "logs", "log", filename, minio.PutObjectOptions{ContentType: "application/json"})
+		// Upload the json as an object directly to minio
+		_, err = minioClient.PutObject(context.Background(), "logs", "log", bytes.NewReader(jsonData), int64(len(jsonData)), minio.PutObjectOptions{ContentType: "application/json"})
 		if err != nil {
-			log.Fatal(err)
+			fmt.Println(err)
+			return
 		}
+		fmt.Println("Uploaded line", lineNumber, "to minio")
 
 		// Increment line number
 		lineNumber++
