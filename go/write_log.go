@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -18,6 +19,13 @@ type LineData struct {
 	ID   int    `json:"id"`
 	Text string `json:"text"`
 }
+
+// Create and initialize a struct that contains an array to hold the output lines, and this entire struct is to be Marshaled into json
+type Output struct {
+	Lines []LineData `json:"lines"`
+}
+
+var MAX_TIMEOUT = 15 * time.Minute
 
 func main() {
 	// Set up connection to minio
@@ -35,8 +43,10 @@ func main() {
 	}
 	log.Printf("%#v\n", minioClient)
 
-	// Start the executable
-	cmd := exec.Command("../run")
+	// Set a timeout
+	ctx, cancel := context.WithTimeout(context.Background(), MAX_TIMEOUT) // 15 minutes timeout
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "../run")
 
 	// Get the stdout pipe
 	stdout, err := cmd.StdoutPipe()
@@ -51,11 +61,6 @@ func main() {
 
 	// Initialize line counter
 	lineNumber := 0
-
-	// Create and initialize a struct that contains an array to hold the output lines, and this entire struct is to be Marshaled into json
-	type Output struct {
-		Lines []LineData `json:"lines"`
-	}
 
 	// Create a new Output struct
 	output := Output{
@@ -75,22 +80,14 @@ func main() {
 		// Append the line to the output struct
 		output.Lines = append(output.Lines, line)
 
-		// Marshal the output into JSON
-		jsonData, err := json.Marshal(output)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Upload the json as an object directly to minio
-		_, err = minioClient.PutObject(context.Background(), "logs", "log", bytes.NewReader(jsonData), int64(len(jsonData)), minio.PutObjectOptions{ContentType: "application/json"})
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		fmt.Println("Uploaded line", lineNumber, "to minio")
-
 		// Increment line number
 		lineNumber++
+		fmt.Println(lineNumber)
+
+		// Upload after 5 lines accumulated
+		if lineNumber%5 == 0 {
+			uploadToMinio(minioClient, output)
+		}
 	}
 
 	// Check for errors in the scanner
@@ -100,6 +97,31 @@ func main() {
 
 	// Wait for the command to finish
 	if err := cmd.Wait(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			// Upload output's content before timed out
+			uploadToMinio(minioClient, output)
+			log.Fatal("Command timed out")
+		} else {
+			log.Fatal(err)
+		}
+	}
+
+	// Upload the final output
+	uploadToMinio(minioClient, output)
+}
+
+func uploadToMinio(minioClient *minio.Client, content Output) {
+	// Marshal the output into JSON
+	jsonData, err := json.Marshal(content)
+	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Upload the json as an object directly to minio
+	_, err = minioClient.PutObject(context.Background(), "logs", "log", bytes.NewReader(jsonData), int64(len(jsonData)), minio.PutObjectOptions{ContentType: "application/json"})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println("Uploaded to minio")
 }
