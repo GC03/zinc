@@ -25,7 +25,7 @@ type Output struct {
 	Lines []LineData `json:"lines"`
 }
 
-var MAX_TIMEOUT = 15 * time.Minute
+var MAX_TIMEOUT = 1
 
 func main() {
 	// Set up connection to minio
@@ -44,7 +44,7 @@ func main() {
 	log.Printf("%#v\n", minioClient)
 
 	// Set a timeout
-	ctx, cancel := context.WithTimeout(context.Background(), MAX_TIMEOUT) // 15 minutes timeout
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MAX_TIMEOUT)*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "../run")
 
@@ -86,7 +86,7 @@ func main() {
 
 		// Upload after 5 lines accumulated
 		if lineNumber%5 == 0 {
-			uploadToMinio(minioClient, output)
+			uploadToMinio(minioClient, &output)
 		}
 	}
 
@@ -99,7 +99,7 @@ func main() {
 	if err := cmd.Wait(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			// Upload output's content before timed out
-			uploadToMinio(minioClient, output)
+			uploadToMinio(minioClient, &output)
 			log.Fatal("Command timed out")
 		} else {
 			log.Fatal(err)
@@ -107,12 +107,12 @@ func main() {
 	}
 
 	// Upload the final output
-	uploadToMinio(minioClient, output)
+	uploadToMinio(minioClient, &output)
 }
 
-func uploadToMinio(minioClient *minio.Client, content Output) {
+func uploadToMinio(minioClient *minio.Client, content *Output) {
 	// Marshal the output into JSON
-	jsonData, err := json.Marshal(content)
+	jsonData, err := json.Marshal(*content)
 	if err != nil {
 		log.Fatal(err)
 	}
