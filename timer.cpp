@@ -7,6 +7,12 @@ int main()
     int lineCount = 0;
     while (lineCount < 50)
     {
+        char command;
+        do
+        {
+            std::cin >> command;
+        } while (command != 's');
+
         // Get the current time
         auto currentTime = std::chrono::system_clock::now();
         std::time_t currentTime_t = std::chrono::system_clock::to_time_t(currentTime);
