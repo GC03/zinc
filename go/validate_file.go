@@ -45,7 +45,6 @@ func ValidateDirectoryContents(path string, requirements map[string]string) (boo
 			// Check if hashes match
 			if hash == expectedHash {
 				unchangedFiles[filePath] = true
-				valid = false
 			}
 		}
 
@@ -60,18 +59,21 @@ func ValidateDirectoryContents(path string, requirements map[string]string) (boo
 	for reqFile := range requirements {
 		if !foundFiles[reqFile] {
 			fmt.Println("Missing file:", reqFile)
+			valid = false
 		}
 	}
 
 	// Report unchanged files
 	for unchangedFile := range unchangedFiles {
 		fmt.Println("Unchanged file:", unchangedFile)
+		valid = false
 	}
 
 	// Report extra files
 	for foundFile := range foundFiles {
 		if _, exists := requirements[foundFile]; !exists {
 			fmt.Println("Extra file:", foundFile)
+			valid = false
 		}
 	}
 
