@@ -11,6 +11,16 @@ import (
 )
 
 func main() {
+	valid, err := ValidateDirectoryContents("test_folder", map[string]string{"test_folder/a": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if !valid {
+		log.Fatal("Directory contents are not valid")
+	} else {
+		fmt.Println("Directory contents are verified")
+	}
+
 	// Set up connection to minio
 	endpoint := "localhost:9000"
 	accessKeyID := "adminhaha"
